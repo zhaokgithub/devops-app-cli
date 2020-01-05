@@ -1,0 +1,1 @@
+export const dependence =['react','react-dom','mobx','mobx-react','antd']

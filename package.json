@@ -1,6 +1,6 @@
 {
   "name": "devops-react-cli",
-  "version": "1.1.10",
+  "version": "1.1.13",
   "keywords": [
     "react"
   ],
@@ -19,8 +19,10 @@
   },
   "files": [
     "index.js",
-    "createReactApp.js",
-    "yarn.lock.cached"
+    "createApp.js",
+    "readme.md",
+    "lib/",
+    "config/"
   ],
   "bin": {
     "devops-react-cli": "./index.js"

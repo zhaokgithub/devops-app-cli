@@ -573,10 +573,6 @@ function getPackageInfo(installPackage) {
 //执行nodejs脚本
 function executeNodeScript({ cwd, args }, data, source) {
   console.log('=========execute node script=======')
-  console.log(cwd)
-  console.log(args)
-  console.log(data)
-  console.log(source)
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,

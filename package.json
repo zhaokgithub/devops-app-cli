@@ -1,6 +1,6 @@
 {
-  "name": "devops-react-cli",
-  "version": "1.1.13",
+  "name": "devops-app-cli",
+  "version": "1.0.0",
   "keywords": [
     "react"
   ],
@@ -25,7 +25,7 @@
     "config/"
   ],
   "bin": {
-    "devops-react-cli": "./index.js"
+    "devops-app-cli": "./index.js"
   },
   "dependencies": {
     "chalk": "3.0.0",

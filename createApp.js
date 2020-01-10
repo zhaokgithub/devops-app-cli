@@ -32,12 +32,7 @@ const program = new commander.Command(packageJson.name)
   //1.3 初始化commader参数
   .option('--verbose', 'print additional logs')
   .option('--info', 'print environment debug info')
-  .option(
-    '--scripts-version <alternative-package>',
-    'Manually specified the version of devops-react-server'
-  )
   .option('--use-npm')
-  .option('--use-pnp')
   .allowUnknownOption()
   .on('--help', () => {
     console.log(`    Only ${chalk.green('<project-directory>')} is required.`);
@@ -58,26 +53,11 @@ const program = new commander.Command(packageJson.name)
       )}`
     );
     console.log(
-      `      - a .tgz archive: ${chalk.green(
-        'https://mysite.com/my-devops-react-server-0.8.2.tgz'
-      )}`
-    );
-    console.log(
-      `      - a .tar.gz archive: ${chalk.green(
-        'https://mysite.com/my-devops-react-server-0.8.2.tar.gz'
-      )}`
-    );
-    console.log(
       `    It is not needed unless you specifically want to use a fork.`
     );
 
     console.log(
-      `    If you have any problems, do not hesitate to file an issue:`
-    );
-    console.log(
-      `      ${chalk.cyan(
-        'https://github.com/zhaokgithub/devops-react-cli/issues/new'
-      )}`
+      `If you have any problems, do not hesitate to file an issue:`
     );
     console.log();
   })
@@ -119,22 +99,17 @@ if (typeof projectName === 'undefined') {
   process.exit(1);
 }
 
-createApp(projectName, program.verbose,
-  program.scriptsVersion,
-  program.useNpm,
-  program.usePnp,
-  program.typescript);
+createApp(projectName, program.verbose,  program.useNpm,);
 
-function createApp(name, verbose, version, useNpm, usePnp) {
+function createApp(name, verbose, useNpm) {
   //1.4 获取当前nodejs环境
-  const unsupportedNodeVersion = !semver.satisfies(process.version, '>=8.10.0');
   // 1.5 当nodejs版本过低 并且是要安装typescript模版时则退出安装
-  console.log(
-    chalk.yellow(
-      `You are using Node ${process.version} so the project will be bootstrapped with an old unsupported version of tools.\n\n` +
-      `Please update to Node 8.10 or higher for a better, fully supported experience.\n`
-    )
-  );
+  if (!semver.satisfies(process.version, '>=8.10.0')) {
+    console.log(
+      chalk.yellow(`Please update to Node 8.10 or higher for a better, fully supported experience.\n`)
+    );
+  }
+
   //2 开始创建
   //2.1 获取项目绝对路径
   const root = path.resolve(name);
@@ -147,9 +122,7 @@ function createApp(name, verbose, version, useNpm, usePnp) {
   if (!Util.isSafeToCreateProjectIn(root, name)) {
     process.exit(1);
   }
-  console.log();
   console.log(`Creating a new React app in ${chalk.green(root)}.`);
-  console.log();
   const packageJson = {
     name: appName,
     version: '0.1.0',
@@ -179,8 +152,6 @@ function createApp(name, verbose, version, useNpm, usePnp) {
           )
         );
       }
-      // Fall back to latest supported devops-react-server for npm 3
-      version = 'devops-react-server@0.9.x';
     }
   } else if (usePnp) {
     //校验包名是否合法并且依赖包中没有与他同名的
@@ -216,28 +187,26 @@ function createApp(name, verbose, version, useNpm, usePnp) {
       );
     }
   }
-  run(root, appName, version, verbose, originalDirectory, useYarn, usePnp);
+  run(root, appName, verbose, originalDirectory, useYarn);
 }
 
 //3. 安装依赖前准备
 //3.1 安装依赖前的准备
-function run(root, appName, version, verbose, originalDirectory, useYarn, usePnp) {
+function run(root, appName, verbose, originalDirectory, useYarn) {
   let template = null
   Promise.all([
-    getDevServePackage(version, originalDirectory),
-    getTemplateInstallPackage(template, originalDirectory),
-  ]).then(([packageToInstall, templateToInstall]) => {
+    Util.getTemplateInstallPackage(template, originalDirectory),
+  ]).then(([ templateToInstall]) => {
     //3.1 获取需要初始化安装的依赖
     new Promise(getCustomInstallPackage).then((customInstall) => {
-      const allDependencies = ['react', 'react-dom', packageToInstall, ...customInstall.features];
-      console.log(allDependencies)
+      const allDependencies = ['react', 'react-dom', 'devops-react-server', ...customInstall.features];
       console.log('Installing packages. This might take a couple of minutes.');
       //3.2 获取安装包的信息
       Promise.all([
-        getPackageInfo(packageToInstall),
-        getPackageInfo(templateToInstall),
+        Util.getPackageInfo('devops-react-server'),
+        Util.getPackageInfo(templateToInstall),
       ])
-        .then(([packageInfo, templateInfo]) =>
+        .then(([templateInfo]) =>
           //3.3 检查是否能正常安装
           Util.checkIfOnline(useYarn).then(isOnline => ({
             isOnline,
@@ -245,19 +214,10 @@ function run(root, appName, version, verbose, originalDirectory, useYarn, usePnp
             templateInfo,
           }))
         )
-        .then(({ isOnline, packageInfo, templateInfo }) => {
-          let packageVersion = semver.coerce(packageInfo.version);
-
-          const templatesVersionMinimum = '3.3.0';
-
-          // Assume compatibility if we can't test the version.
-          if (!semver.valid(packageVersion)) {
-            packageVersion = templatesVersionMinimum;
-          }
-
+        .then(({ isOnline, templateInfo }) => {
           // Only support templates when used alongside new devops-react-server versions.
           const supportsTemplates = semver.gte(
-            packageVersion,
+            "packageVersion",
             templatesVersionMinimum
           );
           if (supportsTemplates) {
@@ -288,24 +248,22 @@ function run(root, appName, version, verbose, originalDirectory, useYarn, usePnp
           console.log(
             `Installing ${chalk.cyan('react')}, ${chalk.cyan(
               'react-dom'
-            )}, and ${chalk.cyan(packageInfo.name)}${
+            )}, and ${chalk.cyan("devops-react-server")}${
             supportsTemplates ? ` with ${chalk.cyan(templateInfo.name)}` : ''
             }...`
           );
           //3.5 执行安装包
           return install(root, useYarn, usePnp, allDependencies, verbose, isOnline)
             .then(() => ({
-              packageInfo,
               supportsTemplates,
               templateInfo,
             }));
         })
-        .then(async ({ packageInfo, supportsTemplates, templateInfo }) => {
+        .then(async ({  supportsTemplates, templateInfo }) => {
           //5 初始化项目
-          const packageName = packageInfo.name;
           const templateName = supportsTemplates ? templateInfo.name : undefined;
-          Util.checkNodeVersion(packageName);
-          Util.setCaretRangeForRuntimeDeps(packageName);
+          Util.checkNodeVersion("devops-react-server");
+          Util.setCaretRangeForRuntimeDeps("devops-react-server");
           const pnpPath = path.resolve(process.cwd(), '.pnp.js');
           const nodeArgs = fs.existsSync(pnpPath) ? ['--require', pnpPath] : [];
           // 5.1 开始执行初始化项目脚本
@@ -318,13 +276,12 @@ function run(root, appName, version, verbose, originalDirectory, useYarn, usePnp
             //5.3 传入执行行初始化项目的参数
             [root, appName, verbose, originalDirectory, templateName],
             `
-          var init = require('${packageName}/scripts/init.js');
+          var init = require('devops-react-server/scripts/init.js');
           init.apply(null, JSON.parse(process.argv[1]));
         `
           );
         })
         .catch(reason => {
-          console.log('Aborting installation.');
           if (reason.command) {
             console.log(`  ${chalk.cyan(reason.command)} has failed.`);
           } else {
@@ -333,7 +290,6 @@ function run(root, appName, version, verbose, originalDirectory, useYarn, usePnp
             );
             console.log(reason);
           }
-          console.log();
           // On 'exit' we will delete these files from target directory.
           const knownGeneratedFiles = [
             'package.json',
@@ -369,28 +325,7 @@ function run(root, appName, version, verbose, originalDirectory, useYarn, usePnp
   });
 }
 
-//或取devops-react-server安装的版本号
-function getDevServePackage(version, originalDirectory) {
-  let packageToInstall = 'devops-react-server';
-  const validSemver = semver.valid(version);
-  //自定义dev-react-server版本号时候
-  if (validSemver) {
-    packageToInstall += `@${validSemver}`;
-  } else if (version) {
-    if (version[0] === '@' && !version.includes('/')) {
-      packageToInstall += version;
-    } else if (version.match(/^file:/)) {
-      packageToInstall = `file:${path.resolve(
-        originalDirectory,
-        version.match(/^file:(.*)?$/)[1]
-      )}`;
-    } else {
-      // for tar.gz or alternative paths
-      packageToInstall = version;
-    }
-  }
-  return Promise.resolve(packageToInstall);
-}
+
 function getCustomInstallPackage(resolve, reject) {
   inquirer.prompt([{
     type: 'checkbox',
@@ -399,6 +334,9 @@ function getCustomInstallPackage(resolve, reject) {
     choices: [
       {
         name: 'mobx'
+      },
+      {
+        name: 'axios'
       },
       {
         name: 'react-router'
@@ -418,40 +356,9 @@ function getCustomInstallPackage(resolve, reject) {
       console.log(chalk.red(err))
     })
 }
-//安装devops-cra-temp以及他的相关依赖
-function getTemplateInstallPackage(template, originalDirectory) {
-  let templateToInstall = 'devops-cra-temp';
-  if (template) {
-    if (template.match(/^file:/)) {
-      templateToInstall = `file:${path.resolve(
-        originalDirectory,
-        template.match(/^file:(.*)?$/)[1]
-      )}`;
-    } else if (
-      template.includes('://') ||
-      template.match(/^.+\.(tgz|tar\.gz)$/)
-    ) {
-      // for tar.gz or alternative paths
-      templateToInstall = template;
-    } else {
-      // Add prefix 'devops-cra-temp-' to non-prefixed templates, leaving any
-      // @scope/ intact.
-      const packageMatch = template.match(/^(@[^/]+\/)?(.+)$/);
-      const scope = packageMatch[1] || '';
-      const templateName = packageMatch[2];
 
-      const name = templateName.startsWith(templateToInstall)
-        ? templateName
-        : `${templateToInstall}-${templateName}`;
-      templateToInstall = `${scope}${name}`;
-    }
-  }
-
-  return Promise.resolve(templateToInstall);
-}
 //获取所需要依赖信息
 // 4安装所需依赖
-console.log('========开始安装所有依赖==========')
 function install(root, useYarn, usePnp, dependencies, verbose, isOnline) {
   return new Promise((resolve, reject) => {
     let command;
@@ -510,69 +417,10 @@ function install(root, useYarn, usePnp, dependencies, verbose, isOnline) {
 
 
 // 提取包名和包的version
-function getPackageInfo(installPackage) {
-  if (installPackage.match(/^.+\.(tgz|tar\.gz)$/)) {
-    return Util.getTemporaryDirectory()
-      .then(obj => {
-        let stream;
-        if (/^http/.test(installPackage)) {
-          stream = hyperquest(installPackage);
-        } else {
-          stream = fs.createReadStream(installPackage);
-        }
-        return Util.extractStream(stream, obj.tmpdir).then(() => obj);
-      })
-      .then(obj => {
-        const { name, version } = require(path.join(
-          obj.tmpdir,
-          'package.json'
-        ));
-        obj.cleanup();
-        return { name, version };
-      })
-      .catch(err => {
-        // The package name could be with or without semver version, e.g. devops-react-server-0.2.0-alpha.1.tgz
-        // However, this function returns package name only without semver version.
-        console.log(
-          `Could not extract the package name from the archive: ${err.message}`
-        );
-        const assumedProjectName = installPackage.match(
-          /^.+\/(.+?)(?:-\d+.+)?\.(tgz|tar\.gz)$/
-        )[1];
-        console.log(
-          `Based on the filename, assuming it is "${chalk.cyan(
-            assumedProjectName
-          )}"`
-        );
-        return Promise.resolve({ name: assumedProjectName });
-      });
-  } else if (installPackage.startsWith('git+')) {
-    // Pull package name out of git urls e.g:
-    // git+https://github.com/mycompany/devops-react-server.git
-    // git+ssh://github.com/mycompany/devops-react-server.git#v1.2.3
-    return Promise.resolve({
-      name: installPackage.match(/([^/]+)\.git(#.*)?$/)[1],
-    });
-  } else if (installPackage.match(/.+@/)) {
-    // Do not match @scope/ when stripping off @version or @tag
-    return Promise.resolve({
-      name: installPackage.charAt(0) + installPackage.substr(1).split('@')[0],
-      version: installPackage.split('@')[1],
-    });
-  } else if (installPackage.match(/^file:/)) {
-    const installPackagePath = installPackage.match(/^file:(.*)?$/)[1];
-    const { name, version } = require(path.join(
-      installPackagePath,
-      'package.json'
-    ));
-    return Promise.resolve({ name, version });
-  }
-  return Promise.resolve({ name: installPackage });
-}
 
 //执行nodejs脚本
 function executeNodeScript({ cwd, args }, data, source) {
-  console.log('=========execute node script=======')
+  console.log('Starting run dev-server-cli init')
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,

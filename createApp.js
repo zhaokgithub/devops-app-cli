@@ -8,31 +8,40 @@ const chalk = require('chalk');
 const commander = require('commander');
 const execSync = require('child_process').execSync;
 const fs = require('fs-extra');
-const hyperquest = require('hyperquest');
+const envinfo = require('envinfo');
 const inquirer = require('inquirer');
 const os = require('os');
 const path = require('path');
 const semver = require('semver');
 const spawn = require('cross-spawn');
 const Util = require('./lib/util');
+const { initDevpencies } = require('./config/config')
 
 const packageJson = require('./package.json');
 
 let projectName;
+let cmd;
 //1.创建前准备
 const program = new commander.Command(packageJson.name)
   .version(packageJson.version)
   //1.1 初始化commander工具
-  .arguments('<project-directory>')
+  .arguments('<cmd> [env]')
   .usage(`${chalk.green('<project-directory>')} [options]`)
   //1.2 获取输入的包名
-  .action(name => {
-    projectName = name;
+  .action((cmd, name) => {
+    cmd = cmd
+    if (cmd === 'create') {
+      projectName = name;
+    }
+    if (cmd === 'serve' && !name) {
+      let html = name ? name : 'index.html'
+      startDevServe(html)
+      return
+    }
   })
   //1.3 初始化commader参数
   .option('--verbose', 'print additional logs')
   .option('--info', 'print environment debug info')
-  .option('--use-npm')
   .allowUnknownOption()
   .on('--help', () => {
     console.log(`    Only ${chalk.green('<project-directory>')} is required.`);
@@ -63,20 +72,19 @@ const program = new commander.Command(packageJson.name)
   })
   .parse(process.argv);
 
+if (cmd == 'serve') {
+  return
+}
+
 if (program.info) {
-  console.log(chalk.bold('当前环境:'));
-  console.log(
-    `\n  当前devops-react-cli包版本号为: ${packageJson.version}`
-  );
-  console.log(`运行路径为： ${__dirname}`);
   return envinfo
     .run(
       {
         System: ['OS', 'CPU'],
         Binaries: ['Node', 'npm', 'Yarn'],
         Browsers: ['Chrome', 'Edge', 'Internet Explorer', 'Firefox', 'Safari'],
-        npmPackages: ['react', 'react-dom', 'devops-react-server'],
-        npmGlobalPackages: ['devops-react-cli'],
+        npmPackages: initDevpencies,
+        npmGlobalPackages: initDevpencies[3],
       },
       {
         duplicates: true,
@@ -89,7 +97,6 @@ if (program.info) {
 }
 
 if (typeof projectName === 'undefined') {
-  console.error('请输入工程名称: ');
   console.log(`${chalk.cyan(program.name())} ${chalk.green('<project-directory>')}`);
   console.log('例如:');
   console.log(`  ${chalk.cyan(program.name())} ${chalk.green('my-react-app')}`);
@@ -99,7 +106,7 @@ if (typeof projectName === 'undefined') {
   process.exit(1);
 }
 
-createApp(projectName, program.verbose,  program.useNpm,);
+createApp(projectName, program.verbose, program.useNpm);
 
 function createApp(name, verbose, useNpm) {
   //1.4 获取当前nodejs环境
@@ -153,23 +160,7 @@ function createApp(name, verbose, useNpm) {
         );
       }
     }
-  } else if (usePnp) {
-    //校验包名是否合法并且依赖包中没有与他同名的
-    const yarnInfo = Util.checkYarnVersion();
-    if (!yarnInfo.hasMinYarnPnp) {
-      if (yarnInfo.yarnVersion) {
-        console.log(
-          chalk.yellow(
-            `You are using Yarn ${yarnInfo.yarnVersion} together with the --use-pnp flag, but Plug'n'Play is only supported starting from the 1.12 release.\n\n` +
-            `Please update to Yarn 1.12 or higher for a better, fully supported experience.\n`
-          )
-        );
-      }
-      // 1.11 had an issue with webpack-dev-middleware, so better not use PnP with it (never reached stable, but still)
-      usePnp = false;
-    }
   }
-
   if (useYarn) {
     let yarnUsesDefaultRegistry = true;
     try {
@@ -192,174 +183,99 @@ function createApp(name, verbose, useNpm) {
 
 //3. 安装依赖前准备
 //3.1 安装依赖前的准备
-function run(root, appName, verbose, originalDirectory, useYarn) {
+async function run(root, appName, verbose, originalDirectory, useYarn) {
   let template = null
-  Promise.all([
-    Util.getTemplateInstallPackage(template, originalDirectory),
-  ]).then(([ templateToInstall]) => {
-    //3.1 获取需要初始化安装的依赖
-    new Promise(getCustomInstallPackage).then((customInstall) => {
-      const allDependencies = ['react', 'react-dom', 'devops-react-server', ...customInstall.features];
-      console.log('Installing packages. This might take a couple of minutes.');
-      //3.2 获取安装包的信息
-      Promise.all([
-        Util.getPackageInfo('devops-react-server'),
-        Util.getPackageInfo(templateToInstall),
-      ])
-        .then(([templateInfo]) =>
-          //3.3 检查是否能正常安装
-          Util.checkIfOnline(useYarn).then(isOnline => ({
-            isOnline,
-            packageInfo,
-            templateInfo,
-          }))
-        )
-        .then(({ isOnline, templateInfo }) => {
-          // Only support templates when used alongside new devops-react-server versions.
-          const supportsTemplates = semver.gte(
-            "packageVersion",
-            templatesVersionMinimum
-          );
-          if (supportsTemplates) {
-            allDependencies.push(templateToInstall);
-          } else if (template) {
-            console.log('');
-            console.log(
-              `The ${chalk.cyan(packageInfo.name)} version you're using ${
-              packageInfo.name === 'devops-react-server'
-                ? 'is not'
-                : 'may not be'
-              } compatible with the ${chalk.cyan('--template')} option.`
-            );
-            console.log('');
-          }
+  let templateToInstall = await Util.getTemplateInstallPackage(template, originalDirectory)
+  //3.1 获取需要初始化安装的依赖
+  new Promise(getCustomInstallPackage).then(async (customInstall) => {
 
-          // TODO: Remove with next major release.
-          //typescript 需要安装的包
-          if (!supportsTemplates && (template || '').includes('typescript')) {
-            allDependencies.push(
-              '@types/node',
-              '@types/react',
-              '@types/react-dom',
-              '@types/jest',
-              'typescript'
-            );
-          }
-          console.log(
-            `Installing ${chalk.cyan('react')}, ${chalk.cyan(
-              'react-dom'
-            )}, and ${chalk.cyan("devops-react-server")}${
-            supportsTemplates ? ` with ${chalk.cyan(templateInfo.name)}` : ''
-            }...`
-          );
-          //3.5 执行安装包
-          return install(root, useYarn, usePnp, allDependencies, verbose, isOnline)
-            .then(() => ({
-              supportsTemplates,
-              templateInfo,
-            }));
-        })
-        .then(async ({  supportsTemplates, templateInfo }) => {
-          //5 初始化项目
-          const templateName = supportsTemplates ? templateInfo.name : undefined;
-          Util.checkNodeVersion("devops-react-server");
-          Util.setCaretRangeForRuntimeDeps("devops-react-server");
-          const pnpPath = path.resolve(process.cwd(), '.pnp.js');
-          const nodeArgs = fs.existsSync(pnpPath) ? ['--require', pnpPath] : [];
-          // 5.1 开始执行初始化项目脚本
-          // 5.2 复制项目模版文件
-          await executeNodeScript(
-            {
-              cwd: process.cwd(),
-              args: nodeArgs,
-            },
-            //5.3 传入执行行初始化项目的参数
-            [root, appName, verbose, originalDirectory, templateName],
-            `
+    const allDependencies = [...initDevpencies, ...customInstall.features];
+    //3.2 获取安装包的信息
+    let templateInfo = await Util.getPackageInfo(templateToInstall)
+    //3.3 检查是否能正常安装
+    Util.checkIfOnline(useYarn).then(isOnline => ({
+      isOnline,
+      templateInfo,
+    }))
+      .then(({ isOnline, templateInfo }) => {
+        console.log('starting install packages')
+        //3.5 执行安装包
+        return install(root, useYarn, allDependencies, verbose, isOnline)
+          .then(() => ({
+            templateInfo,
+          }));
+      })
+      .then(async ({ templateInfo }) => {
+        //5 初始化项目
+        const templateName = templateInfo ? templateInfo.name : undefined;
+        Util.checkNodeVersion("devops-react-server");
+        Util.setCaretRangeForRuntimeDeps("devops-react-server");
+        const pnpPath = path.resolve(process.cwd(), '.pnp.js');
+        const nodeArgs = fs.existsSync(pnpPath) ? ['--require', pnpPath] : [];
+        // 5.1 开始执行初始化项目脚本
+        // 5.2 复制项目模版文件
+        await executeNodeScript(
+          {
+            cwd: process.cwd(),
+            args: nodeArgs,
+          },
+          //5.3 传入执行行初始化项目的参数
+          [root, appName, verbose, originalDirectory, templateName],
+          `
           var init = require('devops-react-server/scripts/init.js');
           init.apply(null, JSON.parse(process.argv[1]));
         `
+        );
+      })
+      .catch(reason => {
+        if (reason.command) {
+          console.log(`  ${chalk.cyan(reason.command)} has failed.`);
+        } else {
+          console.log(
+            chalk.red('Unexpected error. Please report it as a bug:')
           );
-        })
-        .catch(reason => {
-          if (reason.command) {
-            console.log(`  ${chalk.cyan(reason.command)} has failed.`);
-          } else {
-            console.log(
-              chalk.red('Unexpected error. Please report it as a bug:')
-            );
-            console.log(reason);
-          }
-          // On 'exit' we will delete these files from target directory.
-          const knownGeneratedFiles = [
-            'package.json',
-            'yarn.lock',
-            'node_modules',
-          ];
-          const currentFiles = fs.readdirSync(path.join(root));
-          currentFiles.forEach(file => {
-            knownGeneratedFiles.forEach(fileToMatch => {
-              // This removes all knownGeneratedFiles.
-              if (file === fileToMatch) {
-                console.log(`Deleting generated file... ${chalk.cyan(file)}`);
-                fs.removeSync(path.join(root, file));
-              }
-            });
+          console.log(reason);
+        }
+        // On 'exit' we will delete these files from target directory.
+        const knownGeneratedFiles = [
+          'package.json',
+          'yarn.lock',
+          'node_modules',
+        ];
+        const currentFiles = fs.readdirSync(path.join(root));
+        currentFiles.forEach(file => {
+          knownGeneratedFiles.forEach(fileToMatch => {
+            // This removes all knownGeneratedFiles.
+            if (file === fileToMatch) {
+              console.log(`Deleting generated file... ${chalk.cyan(file)}`);
+              fs.removeSync(path.join(root, file));
+            }
           });
-          const remainingFiles = fs.readdirSync(path.join(root));
-          if (!remainingFiles.length) {
-            // Delete target folder if empty
-            console.log(
-              `Deleting ${chalk.cyan(`${appName}/`)} from ${chalk.cyan(
-                path.resolve(root, '..')
-              )}`
-            );
-            process.chdir(path.resolve(root, '..'));
-            fs.removeSync(path.join(root));
-          }
-          console.log('Done.');
-          process.exit(1);
         });
+        const remainingFiles = fs.readdirSync(path.join(root));
+        if (!remainingFiles.length) {
+          // Delete target folder if empty
+          console.log(
+            `Deleting ${chalk.cyan(`${appName}/`)} from ${chalk.cyan(
+              path.resolve(root, '..')
+            )}`
+          );
+          process.chdir(path.resolve(root, '..'));
+          fs.removeSync(path.join(root));
+        }
+        console.log('Done.');
+        process.exit(1);
+      });
 
-    })
-  });
+  })
 }
 
 
-function getCustomInstallPackage(resolve, reject) {
-  inquirer.prompt([{
-    type: 'checkbox',
-    name: 'features',
-    message: 'Check the features needed for your project?',
-    choices: [
-      {
-        name: 'mobx'
-      },
-      {
-        name: 'axios'
-      },
-      {
-        name: 'react-router'
-      },
-      {
-        name: 'antd'
-      },
-      {
-        name: 'dayjs'
-      },
-    ]
-  }])
-    .then((answers) => {
-      resolve(answers)
-    })
-    .catch(err => {
-      console.log(chalk.red(err))
-    })
-}
+
 
 //获取所需要依赖信息
 // 4安装所需依赖
-function install(root, useYarn, usePnp, dependencies, verbose, isOnline) {
+function install(root, useYarn, dependencies, verbose, isOnline) {
   return new Promise((resolve, reject) => {
     let command;
     let args;
@@ -369,9 +285,6 @@ function install(root, useYarn, usePnp, dependencies, verbose, isOnline) {
       args = ['add', '--exact'];
       if (!isOnline) {
         args.push('--offline');
-      }
-      if (usePnp) {
-        args.push('--enable-pnp');
       }
       [].push.apply(args, dependencies);
 
@@ -391,11 +304,6 @@ function install(root, useYarn, usePnp, dependencies, verbose, isOnline) {
         '--loglevel',
         'error',
       ].concat(dependencies);
-      if (usePnp) {
-        console.log(chalk.yellow("NPM doesn't support PnP."));
-        console.log(chalk.yellow('Falling back to the regular installs.'));
-        console.log();
-      }
     }
 
     if (verbose) {
@@ -415,12 +323,9 @@ function install(root, useYarn, usePnp, dependencies, verbose, isOnline) {
   });
 }
 
-
-// 提取包名和包的version
-
 //执行nodejs脚本
 function executeNodeScript({ cwd, args }, data, source) {
-  console.log('Starting run dev-server-cli init')
+  console.log(chalk.green('Starting run dev-server-cli init'))
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
@@ -438,4 +343,33 @@ function executeNodeScript({ cwd, args }, data, source) {
       resolve();
     });
   });
+}
+
+function startDevServe(html) {
+  const result = spawn.sync('serve', [html], { stdio: 'inherit' });
+  if (result.status !== 0) {
+    console.log("starting install the devpencies of cli")
+    spawn.sync('npm', ['install', 'serve', '-g'], { stdio: 'inherit' });
+    spawn.sync('serve', [html], { stdio: 'inherit' });
+  }
+}
+
+function getCustomInstallPackage(resolve, reject) {
+  inquirer.prompt([{
+    type: 'checkbox',
+    name: 'features',
+    message: 'Check the features needed for your project?',
+    choices: [
+      { name: 'mobx' },
+      { name: 'axios' },
+      { name: 'react-router' },
+      { name: 'antd' },
+      { name: 'dayjs' }]
+  }])
+    .then((answers) => {
+      resolve(answers)
+    })
+    .catch(err => {
+      console.log(chalk.red(err))
+    })
 }

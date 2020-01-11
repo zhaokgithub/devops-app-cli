@@ -1,1 +1,5 @@
-export const dependence =['react','react-dom','mobx','mobx-react','antd']
+const initDevpencies =['react', 'react-dom', 'devops-react-server']
+
+module.exports = {
+    initDevpencies
+}

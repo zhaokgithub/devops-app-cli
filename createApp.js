@@ -186,6 +186,7 @@ function createApp(name, verbose, useNpm) {
 async function run(root, appName, verbose, originalDirectory, useYarn) {
   let template = null
   let templateToInstall = await Util.getTemplateInstallPackage(template, originalDirectory)
+  console.log('ddddd')
   //3.1 获取需要初始化安装的依赖
   new Promise(getCustomInstallPackage).then(async (customInstall) => {
 

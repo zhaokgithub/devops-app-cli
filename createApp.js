@@ -8,7 +8,6 @@ const chalk = require('chalk');
 const commander = require('commander');
 const execSync = require('child_process').execSync;
 const fs = require('fs-extra');
-const envinfo = require('envinfo');
 const inquirer = require('inquirer');
 const os = require('os');
 const path = require('path');
@@ -186,7 +185,6 @@ function createApp(name, verbose, useNpm) {
 async function run(root, appName, verbose, originalDirectory, useYarn) {
   let template = null
   let templateToInstall = await Util.getTemplateInstallPackage(template, originalDirectory)
-  console.log('ddddd')
   //3.1 获取需要初始化安装的依赖
   new Promise(getCustomInstallPackage).then(async (customInstall) => {
 
@@ -368,6 +366,14 @@ function getCustomInstallPackage(resolve, reject) {
       { name: 'dayjs' }]
   }])
     .then((answers) => {
+      if (answers && answers.length > 0) {
+        if (answers.includes('mobx')) {
+          answers.push('mobx-react')
+        }
+        if (answers.includes('react-router')) {
+          answers.push('react-router-dom')
+        }
+      }
       resolve(answers)
     })
     .catch(err => {

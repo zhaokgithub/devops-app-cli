@@ -360,7 +360,6 @@ function getCustomInstallPackage(resolve, reject) {
     message: 'Check the features needed for your project?',
     choices: [
       { name: 'mobx' },
-      { name: 'axios' },
       { name: 'react-router' },
       { name: 'antd' },
       { name: 'dayjs' }]

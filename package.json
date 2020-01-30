@@ -1,6 +1,6 @@
 {
   "name": "devops-app-cli",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "keywords": [
     "react"
   ],
@@ -31,7 +31,6 @@
     "chalk": "3.0.0",
     "commander": "4.0.1",
     "cross-spawn": "7.0.1",
-    "devops-app-temp": "^1.0.4",
     "envinfo": "7.5.0",
     "fs-extra": "8.1.0",
     "hyperquest": "2.1.3",

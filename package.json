@@ -2,7 +2,8 @@
   "name": "devops-app-cli",
   "version": "1.0.7",
   "keywords": [
-    "react"
+    "react",
+    "react cli"
   ],
   "description": "Create React apps with no build configuration.",
   "repository": {

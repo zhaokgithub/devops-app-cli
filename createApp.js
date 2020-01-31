@@ -343,7 +343,7 @@ function executeNodeScript({ cwd, args }, data, source) {
     });
   });
 }
-
+//Start the local service
 function startDevServe(html) {
   const result = spawn.sync('serve', [html], { stdio: 'inherit' });
   if (result.status !== 0) {

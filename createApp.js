@@ -218,12 +218,10 @@ async function run(root, appName, verbose, originalDirectory) {
 // 4安装所需依赖
 function install(root, dependencies, verbose, isOnline) {
   console.log('Starting install the list of dependencies:')
-  console.log(dependencies.join(','))
   return new Promise((resolve, reject) => {
     let command;
     let args;
     //4.1 判断是npm或yarn来安装
-
     command = 'npm';
     args = [
       'install',
@@ -253,10 +251,6 @@ function install(root, dependencies, verbose, isOnline) {
 //执行nodejs脚本
 function executeNodeScript({ cwd, args }, data, source) {
   console.log(chalk.green('Starting run dev-server-cli init'))
-  console.log(args)
-  console.log(data)
-  console.log('--------------------')
-  console.log(source)
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
@@ -289,21 +283,23 @@ function getCustomInstallPackage(resolve, reject) {
   inquirer.prompt([{
     type: 'checkbox',
     name: 'features',
-    message: 'Check the features needed for your project?',
+    message: '请选择项目中需要的依赖：',
     choices: [
-      { name: 'mobx' },
-      { name: 'react-router' },
-      { name: 'antd' },
+      { name: 'js-cookie' },
+      { name: '@antv/g2' },
+      { name: '@antv/g6' },
+      //先强制安装 后期改可选
+      // { name: 'mobx' },
       { name: 'dayjs' }]
   }])
     .then((answers) => {
       if (answers && answers.length > 0) {
-        if (answers.includes('mobx')) {
-          answers.push('mobx-react')
-        }
-        if (answers.includes('react-router')) {
-          answers.push('react-router-dom')
-        }
+        // if (answers.includes('mobx')) {
+        //   answers.push('mobx-react')
+        // }
+        // if (answers.includes('react-router')) {
+        //   answers.push('react-router-dom')
+        // }
       }
       resolve(answers)
     })
